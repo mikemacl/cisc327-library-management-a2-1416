@@ -1,0 +1,963 @@
+the following listing contains the python source files for the library management system project (tests removed). after the code listing you will find the functional requirements r1-r7. based on these inputs, generate pytest test cases that exercise the specified behaviour.
+
+source code:
+```
+./app.py
+---
+"""
+Main Flask application entry point for the Library Management System.
+
+This module provides the application factory pattern for creating Flask app instances.
+Routes are organized in separate blueprint modules in the routes package.
+"""
+
+from flask import Flask
+from database import init_database, add_sample_data
+from routes import register_blueprints
+
+
+def create_app():
+    """
+    Application factory function to create and configure Flask app.
+    
+    Returns:
+        Flask: Configured Flask application instance
+    """
+    app = Flask(__name__)
+    app.secret_key = "super secret key"
+    
+    # Initialize the database
+    init_database()
+    
+    # Add sample data for testing and demonstration
+    add_sample_data()
+    
+    # Register all route blueprints
+    register_blueprints(app)
+    
+    return app
+
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
+
+---
+./conftest.py
+---
+"""pytest fixtures for temp sqlite state."""
+
+from __future__ import annotations
+
+import sqlite3
+import sys
+from pathlib import Path
+from typing import Iterator
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import database
+
+
+@pytest.fixture(autouse=True)
+def isolated_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """reset database per test."""
+    db_path = tmp_path / "test_library.db"
+    monkeypatch.setattr(database, "DATABASE", str(db_path))
+    database.init_database()
+    yield
+    try:
+        db_path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+@pytest.fixture
+def raw_connection() -> Iterator[sqlite3.Connection]:
+    """yield raw sqlite connection."""
+    conn = database.get_db_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+---
+./database.py
+---
+"""
+Database module for Library Management System
+Handles all database operations and connections
+"""
+
+import sqlite3
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+
+# Database configuration
+DATABASE = 'library.db'
+
+def get_db_connection():
+    """Get a database connection."""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row  # This enables column access by name
+    return conn
+
+def init_database():
+    """Initialize the database with required tables."""
+    conn = get_db_connection()
+    
+    # Create books table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            author TEXT NOT NULL,
+            isbn TEXT UNIQUE NOT NULL,
+            total_copies INTEGER NOT NULL,
+            available_copies INTEGER NOT NULL
+        )
+    ''')
+    
+    # Create borrow_records table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS borrow_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patron_id TEXT NOT NULL,
+            book_id INTEGER NOT NULL,
+            borrow_date TEXT NOT NULL,
+            due_date TEXT NOT NULL,
+            return_date TEXT,
+            FOREIGN KEY (book_id) REFERENCES books (id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+def add_sample_data():
+    """Add sample data to the database if it's empty."""
+    conn = get_db_connection()
+    book_count = conn.execute('SELECT COUNT(*) as count FROM books').fetchone()['count']
+    
+    if book_count == 0:
+        # Add sample books
+        sample_books = [
+            ('The Great Gatsby', 'F. Scott Fitzgerald', '9780743273565', 3),
+            ('To Kill a Mockingbird', 'Harper Lee', '9780061120084', 2),
+            ('1984', 'George Orwell', '9780451524935', 1)
+        ]
+        
+        for title, author, isbn, copies in sample_books:
+            conn.execute('''
+                INSERT INTO books (title, author, isbn, total_copies, available_copies)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (title, author, isbn, copies, copies))
+        
+        # Make 1984 unavailable by adding a borrow record
+        conn.execute('''
+            INSERT INTO borrow_records (patron_id, book_id, borrow_date, due_date)
+            VALUES (?, ?, ?, ?)
+        ''', ('123456', 3, 
+              (datetime.now() - timedelta(days=5)).isoformat(),
+              (datetime.now() + timedelta(days=9)).isoformat()))
+        
+        # Update available copies for 1984
+        conn.execute('UPDATE books SET available_copies = 0 WHERE id = 3')
+        
+        conn.commit()
+    
+    conn.close()
+
+# Helper Functions for Database Operations
+
+def get_all_books() -> List[Dict]:
+    """Get all books from the database."""
+    conn = get_db_connection()
+    books = conn.execute('SELECT * FROM books ORDER BY title').fetchall()
+    conn.close()
+    return [dict(book) for book in books]
+
+def get_book_by_id(book_id: int) -> Optional[Dict]:
+    """Get a specific book by ID."""
+    conn = get_db_connection()
+    book = conn.execute('SELECT * FROM books WHERE id = ?', (book_id,)).fetchone()
+    conn.close()
+    return dict(book) if book else None
+
+def get_book_by_isbn(isbn: str) -> Optional[Dict]:
+    """Get a specific book by ISBN."""
+    conn = get_db_connection()
+    book = conn.execute('SELECT * FROM books WHERE isbn = ?', (isbn,)).fetchone()
+    conn.close()
+    return dict(book) if book else None
+
+def get_patron_borrowed_books(patron_id: str) -> List[Dict]:
+    """Get currently borrowed books for a patron."""
+    conn = get_db_connection()
+    records = conn.execute('''
+        SELECT br.*, b.title, b.author 
+        FROM borrow_records br 
+        JOIN books b ON br.book_id = b.id 
+        WHERE br.patron_id = ? AND br.return_date IS NULL
+        ORDER BY br.borrow_date
+    ''', (patron_id,)).fetchall()
+    conn.close()
+    
+    borrowed_books = []
+    for record in records:
+        borrowed_books.append({
+            'book_id': record['book_id'],
+            'title': record['title'],
+            'author': record['author'],
+            'borrow_date': datetime.fromisoformat(record['borrow_date']),
+            'due_date': datetime.fromisoformat(record['due_date']),
+            'is_overdue': datetime.now() > datetime.fromisoformat(record['due_date'])
+        })
+    
+    return borrowed_books
+
+def get_patron_borrow_count(patron_id: str) -> int:
+    """Get the number of books currently borrowed by a patron."""
+    conn = get_db_connection()
+    count = conn.execute('''
+        SELECT COUNT(*) as count FROM borrow_records 
+        WHERE patron_id = ? AND return_date IS NULL
+    ''', (patron_id,)).fetchone()['count']
+    conn.close()
+    return count
+
+def get_active_borrow_record(patron_id: str, book_id: int) -> Optional[Dict]:
+    """Return the active borrow record for a patron/book pair if it exists."""
+    conn = get_db_connection()
+    row = conn.execute(
+        '''
+        SELECT br.*, b.title, b.author, b.isbn 
+        FROM borrow_records br
+        JOIN books b ON br.book_id = b.id
+        WHERE br.patron_id = ? AND br.book_id = ? AND br.return_date IS NULL
+        ''',
+        (patron_id, book_id),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_patron_borrow_records(patron_id: str) -> List[Dict]:
+    """Fetch all borrow records for a patron, including book details."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        '''
+        SELECT br.*, b.title, b.author, b.isbn
+        FROM borrow_records br
+        JOIN books b ON br.book_id = b.id
+        WHERE br.patron_id = ?
+        ORDER BY br.borrow_date DESC
+        ''',
+        (patron_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def search_books(search_term: str, search_type: str) -> List[Dict]:
+    """
+    Search for books with case-insensitive partial matching for title/author and
+    exact matching for ISBN.
+    """
+    conn = get_db_connection()
+    term = search_term.strip()
+    if search_type == 'title':
+        rows = conn.execute(
+            '''
+            SELECT * FROM books
+            WHERE LOWER(title) LIKE LOWER(?) 
+            ORDER BY title
+            ''',
+            (f'%{term}%',),
+        ).fetchall()
+    elif search_type == 'author':
+        rows = conn.execute(
+            '''
+            SELECT * FROM books
+            WHERE LOWER(author) LIKE LOWER(?)
+            ORDER BY title
+            ''',
+            (f'%{term}%',),
+        ).fetchall()
+    elif search_type == 'isbn':
+        rows = conn.execute(
+            'SELECT * FROM books WHERE isbn = ?',
+            (term,),
+        ).fetchall()
+    else:
+        conn.close()
+        return []
+    conn.close()
+    return [dict(row) for row in rows]
+
+def insert_book(title: str, author: str, isbn: str, total_copies: int, available_copies: int) -> bool:
+    """Insert a new book into the database."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO books (title, author, isbn, total_copies, available_copies)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (title, author, isbn, total_copies, available_copies))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        return False
+
+def insert_borrow_record(patron_id: str, book_id: int, borrow_date: datetime, due_date: datetime) -> bool:
+    """Insert a new borrow record into the database."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO borrow_records (patron_id, book_id, borrow_date, due_date)
+            VALUES (?, ?, ?, ?)
+        ''', (patron_id, book_id, borrow_date.isoformat(), due_date.isoformat()))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        return False
+
+def update_book_availability(book_id: int, change: int) -> bool:
+    """Update the available copies of a book by a given amount (+1 for return, -1 for borrow)."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            UPDATE books SET available_copies = available_copies + ? WHERE id = ?
+        ''', (change, book_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        return False
+
+def update_borrow_record_return_date(patron_id: str, book_id: int, return_date: datetime) -> bool:
+    """Update the return date for a borrow record."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            UPDATE borrow_records 
+            SET return_date = ? 
+            WHERE patron_id = ? AND book_id = ? AND return_date IS NULL
+        ''', (return_date.isoformat(), patron_id, book_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        return False
+
+
+---
+./library_service.py
+---
+"""
+Library Service Module - Business Logic Functions
+Contains all the core business logic for the Library Management System
+"""
+
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
+from database import (
+    get_book_by_id,
+    get_book_by_isbn,
+    get_patron_borrow_count,
+    get_active_borrow_record,
+    get_patron_borrow_records,
+    insert_book,
+    insert_borrow_record,
+    update_book_availability,
+    update_borrow_record_return_date,
+    get_all_books,
+    search_books,
+)
+
+def add_book_to_catalog(title: str, author: str, isbn: str, total_copies: int) -> Tuple[bool, str]:
+    """
+    Add a new book to the catalog.
+    Implements R1: Book Catalog Management
+    
+    Args:
+        title: Book title (max 200 chars)
+        author: Book author (max 100 chars)
+        isbn: 13-digit ISBN
+        total_copies: Number of copies (positive integer)
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    # Input validation
+    if not title or not title.strip():
+        return False, "Title is required."
+    
+    if len(title.strip()) > 200:
+        return False, "Title must be less than 200 characters."
+    
+    if not author or not author.strip():
+        return False, "Author is required."
+    
+    if len(author.strip()) > 100:
+        return False, "Author must be less than 100 characters."
+    
+    if len(isbn) != 13:
+        return False, "ISBN must be exactly 13 digits."
+
+    if not isbn.isdigit():
+        return False, "ISBN must be exactly 13 digits."
+    
+    if not isinstance(total_copies, int) or total_copies <= 0:
+        return False, "Total copies must be a positive integer."
+    
+    # Check for duplicate ISBN
+    existing = get_book_by_isbn(isbn)
+    if existing:
+        return False, "A book with this ISBN already exists."
+    
+    # Insert new book
+    success = insert_book(title.strip(), author.strip(), isbn, total_copies, total_copies)
+    if success:
+        return True, f'Book "{title.strip()}" has been successfully added to the catalog.'
+    else:
+        return False, "Database error occurred while adding the book."
+
+def borrow_book_by_patron(patron_id: str, book_id: int) -> Tuple[bool, str]:
+    """
+    Allow a patron to borrow a book.
+    Implements R3 as per requirements  
+    
+    Args:
+        patron_id: 6-digit library card ID
+        book_id: ID of the book to borrow
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    # Validate patron ID
+    if not patron_id or not patron_id.isdigit() or len(patron_id) != 6:
+        return False, "Invalid patron ID. Must be exactly 6 digits."
+    
+    # Check if book exists and is available
+    book = get_book_by_id(book_id)
+    if not book:
+        return False, "Book not found."
+    
+    if book['available_copies'] <= 0:
+        return False, "This book is currently not available."
+    
+    # Check patron's current borrowed books count
+    current_borrowed = get_patron_borrow_count(patron_id)
+    
+    if current_borrowed >= 5:
+        return False, "You have reached the maximum borrowing limit of 5 books."
+    
+    # Create borrow record
+    borrow_date = datetime.now()
+    due_date = borrow_date + timedelta(days=14)
+    
+    # Insert borrow record and update availability
+    borrow_success = insert_borrow_record(patron_id, book_id, borrow_date, due_date)
+    if not borrow_success:
+        return False, "Database error occurred while creating borrow record."
+    
+    availability_success = update_book_availability(book_id, -1)
+    if not availability_success:
+        return False, "Database error occurred while updating book availability."
+    
+    return True, f'Successfully borrowed "{book["title"]}". Due date: {due_date.strftime("%Y-%m-%d")}.'
+
+def return_book_by_patron(patron_id: str, book_id: int) -> Tuple[bool, str]:
+    """
+    Process book return by a patron.
+    
+    Implements R4 as per requirements
+    """
+    if not patron_id or not patron_id.isdigit() or len(patron_id) != 6:
+        return False, "Invalid patron ID. Must be exactly 6 digits."
+
+    book = get_book_by_id(book_id)
+    if not book:
+        return False, "Book not found."
+
+    active_record = get_active_borrow_record(patron_id, book_id)
+    if not active_record:
+        return False, "No active borrow record found for this patron and book."
+
+    fee_info = calculate_late_fee_for_book(patron_id, book_id)
+
+    now = datetime.now()
+    updated = update_borrow_record_return_date(patron_id, book_id, now)
+    if not updated:
+        return False, "Database error occurred while updating borrow record."
+
+    availability_success = update_book_availability(book_id, 1)
+    if not availability_success:
+        return False, "Database error occurred while updating book availability."
+
+    fee_amount = fee_info.get("fee_amount", 0.0)
+    status = fee_info.get("status", "Return processed.")
+    return True, (
+        f'Book "{book["title"]}" successfully returned. '
+        f'Late fee: ${fee_amount:.2f}. {status}'
+    )
+
+def calculate_late_fee_for_book(patron_id: str, book_id: int) -> Dict:
+    """
+    Calculate late fees for a specific book.
+    
+    Implements R5 as per requirements 
+    """
+    record = get_active_borrow_record(patron_id, book_id)
+    if not record:
+        return {
+            "fee_amount": 0.0,
+            "days_overdue": 0,
+            "status": "No active borrow found for this patron and book.",
+        }
+
+    due_date = datetime.fromisoformat(record["due_date"])
+    now = datetime.now()
+    days_overdue = max(0, (now - due_date).days)
+
+    if days_overdue <= 0:
+        return {
+            "fee_amount": 0.0,
+            "days_overdue": 0,
+            "status": "Book returned on time.",
+        }
+
+    first_week_days = min(days_overdue, 7)
+    remaining_days = max(0, days_overdue - 7)
+    fee_amount = (first_week_days * 0.50) + (remaining_days * 1.00)
+    fee_amount = min(fee_amount, 15.0)
+
+    return {
+        "fee_amount": round(fee_amount, 2),
+        "days_overdue": days_overdue,
+        "status": "Book is overdue.",
+    }
+
+def search_books_in_catalog(search_term: str, search_type: str) -> List[Dict]:
+    """
+    Search for books in the catalog.
+    
+    Implements R6 as per requirements
+    """
+    if not search_term or not search_type:
+        return []
+
+    return search_books(search_term, search_type)
+
+def get_patron_status_report(patron_id: str) -> Dict:
+    """
+    Get status report for a patron.
+    
+    Implements R7 as per requirements
+    """
+    if not patron_id or not patron_id.isdigit() or len(patron_id) != 6:
+        return {
+            "patron_id": patron_id,
+            "current_loans": [],
+            "history": [],
+            "active_count": 0,
+            "total_late_fees": 0.0,
+            "status": "Invalid patron ID. Must be exactly 6 digits.",
+        }
+
+    records = get_patron_borrow_records(patron_id)
+    current_loans: List[Dict] = []
+    history: List[Dict] = []
+    total_late_fees = 0.0
+
+    for record in records:
+        due_date = datetime.fromisoformat(record["due_date"])
+        entry = {
+            "book_id": record["book_id"],
+            "title": record["title"],
+            "author": record["author"],
+            "borrow_date": datetime.fromisoformat(record["borrow_date"]),
+            "due_date": due_date,
+            "return_date": (
+                datetime.fromisoformat(record["return_date"])
+                if record["return_date"]
+                else None
+            ),
+        }
+        if record["return_date"] is None:
+            fee = calculate_late_fee_for_book(patron_id, record["book_id"])
+            total_late_fees += fee.get("fee_amount", 0.0)
+            entry["is_overdue"] = fee.get("days_overdue", 0) > 0
+            entry["late_fee"] = fee.get("fee_amount", 0.0)
+            current_loans.append(entry)
+        else:
+            history.append(entry)
+
+    return {
+        "patron_id": patron_id,
+        "current_loans": current_loans,
+        "history": history,
+        "active_count": len(current_loans),
+        "total_late_fees": round(total_late_fees, 2),
+        "status": "OK" if records else "No borrow records found.",
+    }
+
+
+---
+./routes/__init__.py
+---
+"""
+Routes Package - Initialize all route blueprints
+"""
+
+from .catalog_routes import catalog_bp
+from .borrowing_routes import borrowing_bp
+from .search_routes import search_bp
+from .api_routes import api_bp
+from .status_routes import status_bp
+
+def register_blueprints(app):
+    """Register all route blueprints with the Flask app."""
+    app.register_blueprint(catalog_bp)
+    app.register_blueprint(borrowing_bp)
+    app.register_blueprint(search_bp)
+    app.register_blueprint(api_bp)
+    app.register_blueprint(status_bp)
+
+
+---
+./routes/api_routes.py
+---
+"""
+API Routes - JSON API endpoints
+"""
+
+from flask import Blueprint, jsonify, request
+from library_service import calculate_late_fee_for_book, search_books_in_catalog
+
+api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+@api_bp.route('/late_fee/<patron_id>/<int:book_id>')
+def get_late_fee(patron_id, book_id):
+    """
+    Calculate late fee for a specific book borrowed by a patron.
+    API endpoint for R4: Late Fee Calculation
+    """
+    result = calculate_late_fee_for_book(patron_id, book_id)
+    return jsonify(result), 501 if 'not implemented' in result.get('status', '') else 200
+
+@api_bp.route('/search')
+def search_books_api():
+    """
+    Search for books via API endpoint.
+    Alternative API interface for R5: Book Search Functionality
+    """
+    search_term = request.args.get('q', '').strip()
+    search_type = request.args.get('type', 'title')
+    
+    if not search_term:
+        return jsonify({'error': 'Search term is required'}), 400
+    
+    # Use business logic function
+    books = search_books_in_catalog(search_term, search_type)
+    
+    return jsonify({
+        'search_term': search_term,
+        'search_type': search_type,
+        'results': books,
+        'count': len(books)
+    })
+
+
+---
+./routes/borrowing_routes.py
+---
+"""
+Borrowing Routes - Book borrowing and returning endpoints
+"""
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from library_service import borrow_book_by_patron, return_book_by_patron
+
+borrowing_bp = Blueprint('borrowing', __name__)
+
+@borrowing_bp.route('/borrow', methods=['POST'])
+def borrow_book():
+    """
+    Process book borrowing request.
+    Web interface for R2: Book Borrowing
+    """
+    patron_id = request.form.get('patron_id', '').strip()
+    
+    try:
+        book_id = int(request.form.get('book_id', ''))
+    except (ValueError, TypeError):
+        flash('Invalid book ID.', 'error')
+        return redirect(url_for('catalog.catalog'))
+    
+    # Use business logic function
+    success, message = borrow_book_by_patron(patron_id, book_id)
+    
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('catalog.catalog'))
+
+@borrowing_bp.route('/return', methods=['GET', 'POST'])
+def return_book():
+    """
+    Process book return.
+    Web interface for R3: Book Return Processing
+    """
+    if request.method == 'GET':
+        return render_template('return_book.html')
+    
+    patron_id = request.form.get('patron_id', '').strip()
+    
+    try:
+        book_id = int(request.form.get('book_id', ''))
+    except (ValueError, TypeError):
+        flash('Invalid book ID.', 'error')
+        return render_template('return_book.html')
+    
+    # Use business logic function
+    success, message = return_book_by_patron(patron_id, book_id)
+    
+    flash(message, 'success' if success else 'error')
+    return render_template('return_book.html')
+
+
+---
+./routes/catalog_routes.py
+---
+"""
+Catalog Routes - Book catalog related endpoints
+"""
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from database import get_all_books
+from library_service import add_book_to_catalog
+
+catalog_bp = Blueprint('catalog', __name__)
+
+@catalog_bp.route('/')
+def index():
+    """Home page redirects to catalog."""
+    return redirect(url_for('catalog.catalog'))
+
+@catalog_bp.route('/catalog')
+def catalog():
+    """
+    Display all books in the catalog.
+    Implements R2: Book Catalog Display
+    """
+    books = get_all_books()
+    return render_template('catalog.html', books=books)
+
+@catalog_bp.route('/add_book', methods=['GET', 'POST'])
+def add_book():
+    """
+    Add a new book to the catalog.
+    Web interface for R1: Book Catalog Management
+    """
+    if request.method == 'GET':
+        return render_template('add_book.html')
+    
+    # POST request - process form data
+    title = request.form.get('title', '').strip()
+    author = request.form.get('author', '').strip()
+    isbn = request.form.get('isbn', '').strip()
+    
+    try:
+        total_copies = int(request.form.get('total_copies', ''))
+    except (ValueError, TypeError):
+        flash('Total copies must be a valid positive integer.', 'error')
+        return render_template('add_book.html')
+    
+    # Use business logic function
+    success, message = add_book_to_catalog(title, author, isbn, total_copies)
+    
+    if success:
+        flash(message, 'success')
+        return redirect(url_for('catalog.catalog'))
+    else:
+        flash(message, 'error')
+        return render_template('add_book.html')
+
+
+---
+./routes/search_routes.py
+---
+"""
+Search Routes - Book search functionality
+"""
+
+from flask import Blueprint, render_template, request, flash
+from library_service import search_books_in_catalog
+
+search_bp = Blueprint('search', __name__)
+
+@search_bp.route('/search')
+def search_books():
+    """
+    Search for books in the catalog.
+    Web interface for R5: Book Search Functionality
+    """
+    search_term = request.args.get('q', '').strip()
+    search_type = request.args.get('type', 'title')
+    
+    if not search_term:
+        return render_template('search.html', books=[], search_term='', search_type=search_type)
+    
+    # Use business logic function
+    books = search_books_in_catalog(search_term, search_type)
+    
+    if not books:
+        flash('Search functionality is not yet implemented.', 'error')
+    
+    return render_template('search.html', books=books, search_term=search_term, search_type=search_type)
+
+
+---
+./routes/status_routes.py
+---
+"""
+Status Routes - Patron status reporting endpoints
+"""
+
+from flask import Blueprint, render_template, request, flash
+
+from library_service import get_patron_status_report
+
+status_bp = Blueprint("status", __name__)
+
+
+@status_bp.route("/status", methods=["GET", "POST"])
+def patron_status():
+    """
+    Display patron status report.
+    Web interface for R7: Patron Status Report
+    """
+    patron_id = ""
+    report = None
+
+    if request.method == "POST":
+        patron_id = request.form.get("patron_id", "").strip()
+    else:
+        patron_id = request.args.get("patron_id", "").strip()
+
+    if patron_id:
+        report = get_patron_status_report(patron_id)
+        if report.get("status", "").startswith("Invalid patron ID"):
+            flash(report["status"], "error")
+            report = None
+    return render_template("patron_status.html", patron_id=patron_id, report=report)
+
+
+---
+
+```
+
+requirements:
+```
+# Library Management System - Requirements Specification
+
+## Project Overview
+This document specifies the requirements for Flask-based Library Management System web application with SQLite database, designed for educational purposes in CISC 327 Software Quality Assurance coursework. The system uses Flask Blueprints for route organization and separates business logic for comprehensive unit testing.
+
+**Total Requirements**: 7 functional requirements (R1-R7). For this assignment, students will focus on unit testing the **business logic functions** that implement these requirements, with emphasis on input validation, business rules, and bug detection.
+
+## Functional Requirements
+
+### R1: Add Book To Catalog
+The system shall provide a web interface to add new books to the catalog via a form with the following fields:
+- Title (required, max 200 characters)
+- Author (required, max 100 characters)
+- ISBN (required, exactly 13 digits)
+- Total copies (required, positive integer)
+- The system shall display success/error messages and redirect to the catalog view after successful addition.
+
+### R2: Book Catalog Display
+The system shall display all books in the catalog in a table format showing:
+- Book ID, Title, Author, ISBN
+- Available copies / Total copies
+- Actions (Borrow button for available books)
+
+### R3: Book Borrowing Interface
+The system shall provide a borrowing interface to borrow books by patron ID:
+
+- Accepts patron ID and book ID as the form parameters
+- Validates patron ID (6-digit format)
+- Checks book availability and patron borrowing limits (max 5 books)
+- Creates borrowing record and updates available copies
+- Displays appropriate success/error messages
+
+### R4: Book Return Processing
+The system shall provide a return interface that includes:
+
+- Accepts patron ID and book ID as form parameters
+- Verifies the book was borrowed by the patron
+- Updates available copies and records return date
+- Calculates and displays any late fees owed
+
+### R5: Late Fee Calculation API
+The system shall provide an API endpoint GET `/api/late_fee/<patron_id>/<book_id>` that includes the following.
+- Calculates late fees for overdue books based on:
+  - Books due 14 days after borrowing
+  - $0.50/day for first 7 days overdue
+  - $1.00/day for each additional day after 7 days
+  - Maximum $15.00 per book
+- Returns JSON response with fee amount and days overdue
+
+### R6: Book Search Functionality
+The system shall provide search functionality with the following parameters:
+- `q`: search term
+- `type`: search type (title, author, isbn)
+- Support partial matching for title/author (case-insensitive)
+- Support exact matching for ISBN
+- Return results in same format as catalog display
+
+### R7: Patron Status Report 
+
+The system shall display patron status for a particular patron that includes the following: 
+
+- Currently borrowed books with due dates
+- Total late fees owed  
+- Number of books currently borrowed
+- Borrowing history
+
+**Note**: There should be a menu option created for showing the patron status in the main interface
+
+## Non-Functional Requirements
+For this project, we will not focus on the non-functional aspects of the software
+
+## Technical Constraints
+- Use Flask with Jinja2 templates for the frontend (already adopted)
+- Use SQLite database for data persistence (already adopted)
+- Implement modular architecture with Flask 
+ Blueprints for route organization (already adopted)
+- Separate business logic functions for unit testing (already adopted)
+- Book ID must be auto-generated positive integer
+- ISBN must be exactly 13 digits
+- Library card ID must be exactly 6 digits
+- Available copies cannot exceed total copies or be negative
+- All monetary values should be displayed with 2 decimal places
+
+## Architecture Requirements
+- **Modular Design**: Use Flask Blueprints to organize routes by functionality
+- **Separation of Concerns**: Business logic functions must be separate from web routes
+- **Testable Structure**: Core functions should be easily unit testable without web context
+- **Database Layer**: SQLite operations should be abstracted into dedicated module
+- **Application Factory**: Use Flask application factory pattern for better testability
+
+**Note:** The current implementation follows the architectural requirements stated above. Any extension to this project should adopt the same. 
+
+```

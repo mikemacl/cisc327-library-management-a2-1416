@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>📊 Patron Status</h2>
+<p>Review the current borrowing activity and history for a patron.</p>
+
+<form method="POST" action="{{ url_for('status.patron_status') }}" style="margin-bottom: 20px;">
+    <div class="form-group">
+        <label for="patron_id">Patron ID *</label>
+        <input type="text" id="patron_id" name="patron_id" maxlength="6" required value="{{ patron_id }}">
+        <small style="color: #666;">Exactly 6 digits (e.g., 123456)</small>
+    </div>
+    <button type="submit" class="btn btn-success">Show Status</button>
+</form>
+
+{% if report %}
+    <div style="margin-bottom: 20px; background-color: #f8f9fa; border-radius: 5px; padding: 15px;">
+        <p><strong>Status:</strong> {{ report.status }}</p>
+        <p><strong>Total Late Fees:</strong> ${{ "%.2f"|format(report.total_late_fees) }}</p>
+        <p><strong>Active Loans:</strong> {{ report.active_count }}</p>
+    </div>
+
+    <h3>Current Loans</h3>
+    {% if report.current_loans %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Book</th>
+                    <th>Borrowed On</th>
+                    <th>Due Date</th>
+                    <th>Late Fee</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for loan in report.current_loans %}
+                    <tr>
+                        <td>{{ loan.title }} <small>by {{ loan.author }}</small></td>
+                        <td>{{ loan.borrow_date.strftime("%Y-%m-%d") }}</td>
+                        <td>{{ loan.due_date.strftime("%Y-%m-%d") }}</td>
+                        <td>${{ "%.2f"|format(loan.late_fee) }}</td>
+                        <td class="{{ 'status-unavailable' if loan.is_overdue else 'status-available' }}">
+                            {{ 'Overdue' if loan.is_overdue else 'On Time' }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No active loans for this patron.</p>
+    {% endif %}
+
+    <h3>Borrowing History</h3>
+    {% if report.history %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Book</th>
+                    <th>Borrowed On</th>
+                    <th>Due Date</th>
+                    <th>Returned On</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in report.history %}
+                    <tr>
+                        <td>{{ entry.title }} <small>by {{ entry.author }}</small></td>
+                        <td>{{ entry.borrow_date.strftime("%Y-%m-%d") }}</td>
+                        <td>{{ entry.due_date.strftime("%Y-%m-%d") }}</td>
+                        <td>{{ entry.return_date.strftime("%Y-%m-%d") }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No borrowing history found.</p>
+    {% endif %}
+{% endif %}
+{% endblock %}
