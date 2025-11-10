@@ -1,0 +1,6 @@
+[run]
+omit =
+    services/payment_service.py
+
+[report]
+show_missing = True
