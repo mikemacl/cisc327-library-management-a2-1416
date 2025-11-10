@@ -1,34 +1,86 @@
-# Assignment 2 Report
+#set document(
+  title: "Assignment 2: System Completion & AI Testing",
+  author: "Mike MacLennan",
+  date: datetime(year: 2025, month: 10, day: 12),
+)
 
-> **Name:** MacLennan  
-> **Student ID:** 20121416  
-> **Repository:** `cisc327-library-management-a2-1416`
+#set page(
+  paper: "us-letter",
+  margin: 1in,
+  header: [
+    #set text(9pt)
+    #grid(
+      columns: (1fr, 1fr),
+      align: (left, right),
+      [CMPE 327 - Assignment 2],
+      [Mike MacLennan - 20121416]
+    )
+    #line(length: 100%, stroke: 0.5pt)
+  ],
+)
 
-## 1. Implementation Progress
+#set text(size: 11pt)
+#set par(justify: true)
 
-- finished the remaining business logic in `library_service.py` so r4–r7 now behave properly (returns update records, late fees cap at $15, search respects mode, and patron status aggregates active/history loans)
-- added the supporting database helpers (`database.py`) needed for returns, search, and status
-- hooked the new functionality into the flask app: return flow now surfaces real messages, the search page shows results, and a patron status page is available from the navbar
-- all tests now passing (`uv run pytest`)
+#align(center + horizon)[
+  #set page(header: none)
+  #text(size: 18pt, weight: "bold")[Assignment 2: System Completion & AI Testing]
 
-## 2. Additional Test Cases
+  #text(size: 14pt)[CMPE 327 - Software Quality Assurance]
 
-- improved `tests/test_library_service.py` so every requirement has at least one assertion set; return, late-fee, search, and status tests are now active instead of `xfail`
-- added r2 coverage to prove `database.get_all_books` returns sorted output and reflects availability changes after a borrow
-- updated existing fixtures to ensure seeded data matches the new logic (for example, replacing the sixth-book borrow check with an enforced limit test)
+  #text(size: 12pt)[Mike MacLennan]
 
-## 3. AI-Assisted Test Generation
+  #text(size: 12pt)[#context document.date.display()]
 
-### Prompt
-- gathered python sources (tests excluded) via `files-to-prompt . -e py --ignore tests --ignore sample_test.py`, then paired the resulting bundle with `requirements_specification.md`
-- final prompt (`reports/A2/prompt.txt`) is just the raw code listing followed by the requirements
+  #link("https://github.com/mikemacl/cisc327-library-management-a2-1416")
+]
+
+#pagebreak()
+
+#outline(indent: auto)
+
+#pagebreak()
+
+#heading(level: 1, numbering: none)[Student Information]
+*Name* & Mike MacLennan \
+*Student ID* & 20121416 \
+*Repository* #link("https://github.com/mikemacl/cisc327-library-management-a2-1416")
+
+= 1. Implementation Progress
+- finished the remaining logic in `library_service.py` so r4–r7 now
+  behave properly (returns update records, late fees cap at \$15, search
+  respects mode, and patron status aggregates active/history loans)
+- added database helpers (`database.py`) needed for returns, search, and
+  status
+- hooked new functionality into the flask app: return flow now surfaces
+  real messages, the search page shows results, and a patron status page
+  is available from the navbar
+- all tests passing (`uv run pytest`)
+
+= 2. Additional Test Cases
+- improved `tests/test_library_service.py` so every requirement has at
+  least one assertion set; return, late-fee, search, and status tests
+  are now active instead of `xfail`
+- added r2 coverage to prove `database.get_all_books` returns sorted
+  output and reflects availability changes after a borrow
+- updated existing fixtures to ensure seeded data matches the new logic
+  (for example, replacing the sixth-book borrow check with an enforced
+  limit test)
+
+= 3. AI-Assisted Test Generation
+== Prompt
+- gathered python sources (tests excluded) via
+  `files-to-prompt . -e py --ignore tests --ignore sample_test.py`, then
+  paired the resulting bundle with `requirements_specification.md`
+- final prompt (`reports/A2/prompt.txt`) is just the raw code listing
+  followed by the requirements
 
 ```
 the following listing contains the python source files for the library management system project (tests removed). after the code listing you will find the functional requirements r1-r7. based on these inputs, generate pytest test cases that exercise the specified behaviour.
 ```
 
-### Responses
-#### gpt-5-codex
+== Responses
+=== GPT-5-Codex
 ```python
 from datetime import datetime, timedelta
 
@@ -401,7 +453,8 @@ def test_get_patron_status_report_includes_current_loans_history_and_fees():
     assert isinstance(history_entry["return_date"], datetime)
 ```
 
-#### sonnet-4.5
+#pagebreak()
+=== Claude Sonnet 4.5
 ```python
 # test_library_service.py
 """
@@ -436,7 +489,7 @@ from database import (
 
 class TestAddBookToCatalog:
     """Tests for R1: Add Book To Catalog functionality."""
-    
+
     def test_add_valid_book(self):
         """Test adding a valid book succeeds."""
         success, message = add_book_to_catalog(
@@ -444,7 +497,7 @@ class TestAddBookToCatalog:
         )
         assert success is True
         assert "successfully added" in message
-        
+
         # Verify book was added to database
         book = get_book_by_isbn("1234567890123")
         assert book is not None
@@ -452,7 +505,7 @@ class TestAddBookToCatalog:
         assert book['author'] == "Test Author"
         assert book['total_copies'] == 5
         assert book['available_copies'] == 5
-    
+
     def test_add_book_empty_title(self):
         """Test adding book with empty title fails."""
         success, message = add_book_to_catalog(
@@ -460,7 +513,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "Title is required" in message
-    
+
     def test_add_book_whitespace_title(self):
         """Test adding book with whitespace-only title fails."""
         success, message = add_book_to_catalog(
@@ -468,7 +521,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "Title is required" in message
-    
+
     def test_add_book_title_too_long(self):
         """Test adding book with title exceeding 200 characters fails."""
         long_title = "A" * 201
@@ -477,7 +530,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "less than 200 characters" in message
-    
+
     def test_add_book_title_exactly_200_chars(self):
         """Test adding book with exactly 200 character title succeeds."""
         title_200 = "A" * 200
@@ -485,7 +538,7 @@ class TestAddBookToCatalog:
             title_200, "Test Author", "1234567890123", 5
         )
         assert success is True
-    
+
     def test_add_book_empty_author(self):
         """Test adding book with empty author fails."""
         success, message = add_book_to_catalog(
@@ -493,7 +546,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "Author is required" in message
-    
+
     def test_add_book_whitespace_author(self):
         """Test adding book with whitespace-only author fails."""
         success, message = add_book_to_catalog(
@@ -501,7 +554,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "Author is required" in message
-    
+
     def test_add_book_author_too_long(self):
         """Test adding book with author exceeding 100 characters fails."""
         long_author = "A" * 101
@@ -510,7 +563,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "less than 100 characters" in message
-    
+
     def test_add_book_author_exactly_100_chars(self):
         """Test adding book with exactly 100 character author succeeds."""
         author_100 = "A" * 100
@@ -518,7 +571,7 @@ class TestAddBookToCatalog:
             "Test Book", author_100, "1234567890123", 5
         )
         assert success is True
-    
+
     def test_add_book_isbn_too_short(self):
         """Test adding book with ISBN less than 13 digits fails."""
         success, message = add_book_to_catalog(
@@ -526,7 +579,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "exactly 13 digits" in message
-    
+
     def test_add_book_isbn_too_long(self):
         """Test adding book with ISBN more than 13 digits fails."""
         success, message = add_book_to_catalog(
@@ -534,7 +587,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "exactly 13 digits" in message
-    
+
     def test_add_book_isbn_non_numeric(self):
         """Test adding book with non-numeric ISBN fails."""
         success, message = add_book_to_catalog(
@@ -542,7 +595,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "exactly 13 digits" in message
-    
+
     def test_add_book_isbn_with_spaces(self):
         """Test adding book with ISBN containing spaces fails."""
         success, message = add_book_to_catalog(
@@ -550,19 +603,19 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "exactly 13 digits" in message
-    
+
     def test_add_book_duplicate_isbn(self):
         """Test adding book with duplicate ISBN fails."""
         # Add first book
         add_book_to_catalog("Book One", "Author One", "1234567890123", 3)
-        
+
         # Try to add another book with same ISBN
         success, message = add_book_to_catalog(
             "Book Two", "Author Two", "1234567890123", 5
         )
         assert success is False
         assert "already exists" in message
-    
+
     def test_add_book_zero_copies(self):
         """Test adding book with zero copies fails."""
         success, message = add_book_to_catalog(
@@ -570,7 +623,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "positive integer" in message
-    
+
     def test_add_book_negative_copies(self):
         """Test adding book with negative copies fails."""
         success, message = add_book_to_catalog(
@@ -578,7 +631,7 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "positive integer" in message
-    
+
     def test_add_book_float_copies(self):
         """Test adding book with float copies fails."""
         success, message = add_book_to_catalog(
@@ -586,14 +639,14 @@ class TestAddBookToCatalog:
         )
         assert success is False
         assert "positive integer" in message
-    
+
     def test_add_book_strips_whitespace(self):
         """Test that title and author whitespace is stripped."""
         success, message = add_book_to_catalog(
             "  Test Book  ", "  Test Author  ", "1234567890123", 5
         )
         assert success is True
-        
+
         book = get_book_by_isbn("1234567890123")
         assert book['title'] == "Test Book"
         assert book['author'] == "Test Author"
@@ -605,73 +658,73 @@ class TestAddBookToCatalog:
 
 class TestBorrowBook:
     """Tests for R3: Book Borrowing Interface."""
-    
+
     def test_borrow_valid_book(self):
         """Test borrowing an available book succeeds."""
         # Add a book first
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("123456", book['id'])
         assert success is True
         assert "Successfully borrowed" in message
         assert "Due date:" in message
-        
+
         # Verify borrow count increased
         assert get_patron_borrow_count("123456") == 1
-    
+
     def test_borrow_invalid_patron_id_non_numeric(self):
         """Test borrowing with non-numeric patron ID fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("ABCDEF", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_borrow_invalid_patron_id_too_short(self):
         """Test borrowing with patron ID less than 6 digits fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("12345", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_borrow_invalid_patron_id_too_long(self):
         """Test borrowing with patron ID more than 6 digits fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("1234567", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_borrow_invalid_patron_id_empty(self):
         """Test borrowing with empty patron ID fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_borrow_nonexistent_book(self):
         """Test borrowing non-existent book fails."""
         success, message = borrow_book_by_patron("123456", 9999)
         assert success is False
         assert "Book not found" in message
-    
+
     def test_borrow_unavailable_book(self):
         """Test borrowing unavailable book fails."""
         # Add book with 0 available copies
         insert_book("Test Book", "Test Author", "1234567890123", 3, 0)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = borrow_book_by_patron("123456", book['id'])
         assert success is False
         assert "not available" in message
-    
+
     def test_borrow_at_max_limit(self):
         """Test borrowing when patron has 5 books fails."""
         # Add 5 books and borrow all
@@ -680,16 +733,16 @@ class TestBorrowBook:
             insert_book(f"Book {i}", "Author", isbn, 1, 1)
             book = get_book_by_isbn(isbn)
             borrow_book_by_patron("123456", book['id'])
-        
+
         # Try to borrow 6th book
         insert_book("Book 6", "Author", "1234567890125", 1, 1)
         book = get_book_by_isbn("1234567890125")
-        
+
         success, message = borrow_book_by_patron("123456", book['id'])
         assert success is False
         assert "maximum borrowing limit" in message
         assert "5 books" in message
-    
+
     def test_borrow_just_below_max_limit(self):
         """Test borrowing when patron has 4 books succeeds."""
         # Add 4 books and borrow all
@@ -698,33 +751,33 @@ class TestBorrowBook:
             insert_book(f"Book {i}", "Author", isbn, 1, 1)
             book = get_book_by_isbn(isbn)
             borrow_book_by_patron("123456", book['id'])
-        
+
         # Borrow 5th book should succeed
         insert_book("Book 5", "Author", "1234567890124", 1, 1)
         book = get_book_by_isbn("1234567890124")
-        
+
         success, message = borrow_book_by_patron("123456", book['id'])
         assert success is True
-    
+
     def test_borrow_updates_available_copies(self):
         """Test that borrowing decrements available copies."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         borrow_book_by_patron("123456", book['id'])
-        
+
         updated_book = get_book_by_isbn("1234567890123")
         assert updated_book['available_copies'] == 2
-    
+
     def test_borrow_sets_correct_due_date(self):
         """Test that due date is set 14 days from borrow."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         before_borrow = datetime.now()
         success, message = borrow_book_by_patron("123456", book['id'])
         after_borrow = datetime.now()
-        
+
         assert success is True
         # Extract date from message
         import re
@@ -732,11 +785,11 @@ class TestBorrowBook:
         assert match is not None
         due_date_str = match.group(1)
         due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
-        
+
         # Due date should be approximately 14 days from now
         expected_min = before_borrow + timedelta(days=14)
         expected_max = after_borrow + timedelta(days=14)
-        
+
         assert expected_min <= due_date <= expected_max
 
 
@@ -746,99 +799,99 @@ class TestBorrowBook:
 
 class TestReturnBook:
     """Tests for R4: Book Return Processing."""
-    
+
     def test_return_valid_book_on_time(self):
         """Test returning a book on time succeeds with no fee."""
         # Setup: add book and borrow it
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
         borrow_book_by_patron("123456", book['id'])
-        
+
         success, message = return_book_by_patron("123456", book['id'])
         assert success is True
         assert "successfully returned" in message
         assert "Late fee: $0.00" in message
-    
+
     def test_return_invalid_patron_id(self):
         """Test returning with invalid patron ID fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = return_book_by_patron("ABCDEF", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_return_patron_id_too_short(self):
         """Test returning with patron ID less than 6 digits fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = return_book_by_patron("12345", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_return_patron_id_too_long(self):
         """Test returning with patron ID more than 6 digits fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = return_book_by_patron("1234567", book['id'])
         assert success is False
         assert "Invalid patron ID" in message
-    
+
     def test_return_nonexistent_book(self):
         """Test returning non-existent book fails."""
         success, message = return_book_by_patron("123456", 9999)
         assert success is False
         assert "Book not found" in message
-    
+
     def test_return_not_borrowed_book(self):
         """Test returning book not borrowed by patron fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         success, message = return_book_by_patron("123456", book['id'])
         assert success is False
         assert "No active borrow record" in message
-    
+
     def test_return_borrowed_by_different_patron(self):
         """Test returning book borrowed by different patron fails."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
         borrow_book_by_patron("111111", book['id'])
-        
+
         success, message = return_book_by_patron("222222", book['id'])
         assert success is False
         assert "No active borrow record" in message
-    
+
     def test_return_updates_available_copies(self):
         """Test that returning increments available copies."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
         borrow_book_by_patron("123456", book['id'])
-        
+
         # Available copies should be 2
         book_after_borrow = get_book_by_isbn("1234567890123")
         assert book_after_borrow['available_copies'] == 2
-        
+
         return_book_by_patron("123456", book['id'])
-        
+
         # Available copies should be back to 3
         book_after_return = get_book_by_isbn("1234567890123")
         assert book_after_return['available_copies'] == 3
-    
+
     def test_return_overdue_book_calculates_fee(self):
         """Test returning overdue book calculates late fee."""
         # Setup: add book and create overdue borrow record
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # Create borrow record with past dates
         past_borrow = datetime.now() - timedelta(days=20)
         past_due = datetime.now() - timedelta(days=6)
         insert_borrow_record("123456", book['id'], past_borrow, past_due)
         update_book_availability(book['id'], -1)
-        
+
         success, message = return_book_by_patron("123456", book['id'])
         assert success is True
         assert "Late fee:" in message
@@ -852,112 +905,112 @@ class TestReturnBook:
 
 class TestCalculateLateFee:
     """Tests for R5: Late Fee Calculation API."""
-    
+
     def test_late_fee_on_time_return(self):
         """Test late fee is $0 for on-time return."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # Borrow with future due date
         borrow_date = datetime.now() - timedelta(days=5)
         due_date = datetime.now() + timedelta(days=9)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 0.0
         assert result['days_overdue'] == 0
         assert "on time" in result['status'].lower()
-    
+
     def test_late_fee_1_day_overdue(self):
         """Test late fee for 1 day overdue is $0.50."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # Borrow with due date 1 day ago
         borrow_date = datetime.now() - timedelta(days=15)
         due_date = datetime.now() - timedelta(days=1)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 0.50
         assert result['days_overdue'] == 1
         assert "overdue" in result['status'].lower()
-    
+
     def test_late_fee_7_days_overdue(self):
         """Test late fee for 7 days overdue is $3.50."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # Borrow with due date 7 days ago
         borrow_date = datetime.now() - timedelta(days=21)
         due_date = datetime.now() - timedelta(days=7)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 3.50
         assert result['days_overdue'] == 7
-    
+
     def test_late_fee_8_days_overdue(self):
         """Test late fee for 8 days overdue is $4.50."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # 7 days @ $0.50 = $3.50, 1 day @ $1.00 = $1.00, total = $4.50
         borrow_date = datetime.now() - timedelta(days=22)
         due_date = datetime.now() - timedelta(days=8)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 4.50
         assert result['days_overdue'] == 8
-    
+
     def test_late_fee_14_days_overdue(self):
         """Test late fee for 14 days overdue is $10.50."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # 7 days @ $0.50 = $3.50, 7 days @ $1.00 = $7.00, total = $10.50
         borrow_date = datetime.now() - timedelta(days=28)
         due_date = datetime.now() - timedelta(days=14)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 10.50
         assert result['days_overdue'] == 14
-    
+
     def test_late_fee_maximum_cap(self):
         """Test late fee is capped at $15.00."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # 30 days overdue would be $26.50 without cap
         borrow_date = datetime.now() - timedelta(days=44)
         due_date = datetime.now() - timedelta(days=30)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 15.00
         assert result['days_overdue'] == 30
-    
+
     def test_late_fee_no_active_borrow(self):
         """Test late fee calculation with no active borrow."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 0.0
         assert result['days_overdue'] == 0
         assert "No active borrow" in result['status']
-    
+
     def test_late_fee_exactly_at_transition(self):
         """Test late fee at exactly 7 days (last day of $0.50 rate)."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         borrow_date = datetime.now() - timedelta(days=21)
         due_date = datetime.now() - timedelta(days=7)
         insert_borrow_record("123456", book['id'], borrow_date, due_date)
-        
+
         result = calculate_late_fee_for_book("123456", book['id'])
         assert result['fee_amount'] == 3.50  # 7 * 0.50
 
@@ -968,109 +1021,109 @@ class TestCalculateLateFee:
 
 class TestSearchBooks:
     """Tests for R6: Book Search Functionality."""
-    
+
     def test_search_by_title_exact_match(self):
         """Test searching by exact title match."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("The Great Gatsby", "title")
         assert len(results) == 1
         assert results[0]['title'] == "The Great Gatsby"
-    
+
     def test_search_by_title_partial_match(self):
         """Test searching by partial title match."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
         insert_book("Great Expectations", "Charles Dickens", "1234567890124", 2, 2)
-        
+
         results = search_books_in_catalog("Great", "title")
         assert len(results) == 2
-    
+
     def test_search_by_title_case_insensitive(self):
         """Test title search is case-insensitive."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("great gatsby", "title")
         assert len(results) == 1
         assert results[0]['title'] == "The Great Gatsby"
-    
+
     def test_search_by_title_no_results(self):
         """Test title search with no matches returns empty list."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("Nonexistent Book", "title")
         assert len(results) == 0
-    
+
     def test_search_by_author_exact_match(self):
         """Test searching by exact author match."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("F. Scott Fitzgerald", "author")
         assert len(results) == 1
         assert results[0]['author'] == "F. Scott Fitzgerald"
-    
+
     def test_search_by_author_partial_match(self):
         """Test searching by partial author match."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
         insert_book("Tender is the Night", "F. Scott Fitzgerald", "1234567890124", 2, 2)
-        
+
         results = search_books_in_catalog("Fitzgerald", "author")
         assert len(results) == 2
-    
+
     def test_search_by_author_case_insensitive(self):
         """Test author search is case-insensitive."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("fitzgerald", "author")
         assert len(results) == 1
-    
+
     def test_search_by_isbn_exact_match(self):
         """Test searching by ISBN (exact match only)."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("1234567890123", "isbn")
         assert len(results) == 1
         assert results[0]['isbn'] == "1234567890123"
-    
+
     def test_search_by_isbn_partial_no_match(self):
         """Test ISBN search does not support partial matching."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("12345", "isbn")
         assert len(results) == 0
-    
+
     def test_search_by_isbn_no_results(self):
         """Test ISBN search with no match returns empty list."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("9999999999999", "isbn")
         assert len(results) == 0
-    
+
     def test_search_empty_term(self):
         """Test search with empty term returns empty list."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("", "title")
         assert len(results) == 0
-    
+
     def test_search_whitespace_term(self):
         """Test search with whitespace-only term."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("   ", "title")
         assert len(results) == 0
-    
+
     def test_search_invalid_type(self):
         """Test search with invalid type returns empty list."""
         insert_book("The Great Gatsby", "F. Scott Fitzgerald", "1234567890123", 3, 3)
-        
+
         results = search_books_in_catalog("Gatsby", "invalid_type")
         assert len(results) == 0
-    
+
     def test_search_none_term(self):
         """Test search with None term returns empty list."""
         results = search_books_in_catalog(None, "title")
         assert len(results) == 0
-    
+
     def test_search_none_type(self):
         """Test search with None type returns empty list."""
         results = search_books_in_catalog("Gatsby", None)
@@ -1083,33 +1136,33 @@ class TestSearchBooks:
 
 class TestPatronStatusReport:
     """Tests for R7: Patron Status Report."""
-    
+
     def test_status_valid_patron_no_borrows(self):
         """Test status report for patron with no borrows."""
         report = get_patron_status_report("123456")
-        
+
         assert report['patron_id'] == "123456"
         assert report['current_loans'] == []
         assert report['history'] == []
         assert report['active_count'] == 0
         assert report['total_late_fees'] == 0.0
         assert "No borrow records" in report['status']
-    
+
     def test_status_valid_patron_with_current_loans(self):
         """Test status report for patron with current loans."""
         # Add and borrow a book
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
         borrow_book_by_patron("123456", book['id'])
-        
+
         report = get_patron_status_report("123456")
-        
+
         assert report['patron_id'] == "123456"
         assert len(report['current_loans']) == 1
         assert report['current_loans'][0]['title'] == "Test Book"
         assert report['active_count'] == 1
         assert report['total_late_fees'] == 0.0
-    
+
     def test_status_with_returned_books(self):
         """Test status report includes returned books in history."""
         # Add, borrow, and return a book
@@ -1117,32 +1170,32 @@ class TestPatronStatusReport:
         book = get_book_by_isbn("1234567890123")
         borrow_book_by_patron("123456", book['id'])
         return_book_by_patron("123456", book['id'])
-        
+
         report = get_patron_status_report("123456")
-        
+
         assert len(report['current_loans']) == 0
         assert len(report['history']) == 1
         assert report['history'][0]['title'] == "Test Book"
         assert report['history'][0]['return_date'] is not None
-    
+
     def test_status_with_overdue_books(self):
         """Test status report calculates late fees for overdue books."""
         insert_book("Test Book", "Test Author", "1234567890123", 3, 3)
         book = get_book_by_isbn("1234567890123")
-        
+
         # Create overdue borrow
         past_borrow = datetime.now() - timedelta(days=20)
         past_due = datetime.now() - timedelta(days=6)
         insert_borrow_record("123456", book['id'], past_borrow, past_due)
         update_book_availability(book['id'], -1)
-        
+
         report = get_patron_status_report("123456")
-        
+
         assert len(report['current_loans']) == 1
         assert report['current_loans'][0]['is_overdue'] is True
         assert report['current_loans'][0]['late_fee'] > 0
         assert report['total_late_fees'] > 0
-    
+
     def test_status_multiple_current_loans(self):
         """Test status report with multiple current loans."""
         # Borrow 3 books
@@ -1151,32 +1204,32 @@ class TestPatronStatusReport:
             insert_book(f"Book {i}", "Author", isbn, 1, 1)
             book = get_book_by_isbn(isbn)
             borrow_book_by_patron("123456", book['id'])
-        
+
         report = get_patron_status_report("123456")
-        
+
         assert len(report['current_loans']) == 3
         assert report['active_count'] == 3
-    
+
     def test_status_invalid_patron_id_non_numeric(self):
         """Test status report with non-numeric patron ID."""
         report = get_patron_status_report("ABCDEF")
-        
+
         assert "Invalid patron ID" in report['status']
         assert report['current_loans'] == []
         assert report['history'] == []
-    
+
     def test_status_invalid_patron_id_too_short(self):
         """Test status report with patron ID less than 6 digits."""
         report = get_patron_status_report("12345")
-        
+
         assert "Invalid patron ID" in report['status']
-    
+
     def test_status_invalid_patron_id_too_long(self):
         """Test status report with patron ID more than 6 digits."""
         report = get_patron_status_report("1234567")
-        
+
         assert "Invalid patron ID" in report['status']
-    
+
     def test_status_total_late_fees_multiple_books(self):
         """Test total late fees across multiple overdue books."""
         # Create 2 overdue books
@@ -1184,25 +1237,25 @@ class TestPatronStatusReport:
             isbn = f"123456789012{i}"
             insert_book(f"Book {i}", "Author", isbn, 1, 1)
             book = get_book_by_isbn(isbn)
-            
+
             past_borrow = datetime.now() - timedelta(days=20)
             past_due = datetime.now() - timedelta(days=5)
             insert_borrow_record("123456", book['id'], past_borrow, past_due)
             update_book_availability(book['id'], -1)
-        
+
         report = get_patron_status_report("123456")
-        
+
         # Each book: 5 days * $0.50 = $2.50, total = $5.00
         assert report['total_late_fees'] == 5.00
         assert len(report['current_loans']) == 2
-    
+
     def test_status_mixed_on_time_and_overdue(self):
         """Test status report with mix of on-time and overdue books."""
         # On-time book
         insert_book("On Time Book", "Author", "1234567890120", 1, 1)
         book1 = get_book_by_isbn("1234567890120")
         borrow_book_by_patron("123456", book1['id'])
-        
+
         # Overdue book
         insert_book("Overdue Book", "Author", "1234567890121", 1, 1)
         book2 = get_book_by_isbn("1234567890121")
@@ -1210,24 +1263,26 @@ class TestPatronStatusReport:
         past_due = datetime.now() - timedelta(days=5)
         insert_borrow_record("123456", book2['id'], past_borrow, past_due)
         update_book_availability(book2['id'], -1)
-        
+
         report = get_patron_status_report("123456")
-        
+
         assert len(report['current_loans']) == 2
         assert report['total_late_fees'] > 0
-        
+
         # Check one is overdue and one is not
         overdue_count = sum(1 for loan in report['current_loans'] if loan['is_overdue'])
         assert overdue_count == 1
-    
+
     def test_status_empty_patron_id(self):
         """Test status report with empty patron ID."""
         report = get_patron_status_report("")
-        
+
         assert "Invalid patron ID" in report['status']
 ```
 
-#### gemini-2.5-pro
+#pagebreak()
+
+=== Gemini-2.5-Pro
 ```python
 # ./test_library_service.py
 
@@ -1292,7 +1347,7 @@ class TestR1AddBook:
 
         assert success is True
         assert "successfully added" in message
-        
+
         # Verify in database
         book = get_book_by_isbn(isbn)
         assert book is not None
@@ -1305,10 +1360,10 @@ class TestR1AddBook:
         # This ISBN exists in the sample data
         isbn = "9780743273565"
         success, message = add_book_to_catalog("Another Book", "Some Author", isbn, 1)
-        
+
         assert success is False
         assert "ISBN already exists" in message
-        
+
     @pytest.mark.parametrize("title, author, isbn, copies, expected_msg", [
         ("", "Author", "1112223334445", 1, "Title is required"),
         ("Title", "", "1112223334445", 1, "Author is required"),
@@ -1341,7 +1396,7 @@ class TestR3BorrowBook:
 
         assert success is True
         assert "Successfully borrowed" in message
-        
+
         # Verify DB changes
         book_after = get_book_by_id(book_id)
         assert book_after["available_copies"] == book_before["available_copies"] - 1
@@ -1353,7 +1408,7 @@ class TestR3BorrowBook:
         book_id = 3  # '1984' from sample data is not available
 
         success, message = borrow_book_by_patron(patron_id, book_id)
-        
+
         assert success is False
         assert "not available" in message
         assert get_patron_borrow_count(patron_id) == 0
@@ -1365,12 +1420,12 @@ class TestR3BorrowBook:
         for i in range(5):
             book_id = add_book_to_catalog(f"Book {i}", "Author", f"99988877766{i}", 1)[0]
             borrow_book_by_patron(patron_id, i + 4) # book_ids are 4, 5, 6, 7, 8
-        
+
         assert get_patron_borrow_count(patron_id) == 5
 
         # Attempt to borrow a 6th book
         success, message = borrow_book_by_patron(patron_id, 1) # 'The Great Gatsby'
-        
+
         assert success is False
         assert "maximum borrowing limit" in message
 
@@ -1388,19 +1443,19 @@ class TestR3BorrowBook:
 
 class TestR4ReturnBook:
     """Tests for R4: Book Return Processing"""
-    
+
     def test_return_book_success(self):
         """R4: Test a successful, on-time book return."""
         patron_id = "444444"
         book_id = 2  # 'To Kill a Mockingbird'
-        
+
         borrow_success, _ = borrow_book_by_patron(patron_id, book_id)
         assert borrow_success is True
-        
+
         book_before = get_book_by_id(book_id)
-        
+
         return_success, message = return_book_by_patron(patron_id, book_id)
-        
+
         assert return_success is True
         assert "successfully returned" in message
         assert "Late fee: $0.00" in message
@@ -1409,17 +1464,17 @@ class TestR4ReturnBook:
         book_after = get_book_by_id(book_id)
         assert book_after["available_copies"] == book_before["available_copies"] + 1
         assert get_active_borrow_record(patron_id, book_id) is None
-    
+
     def test_return_book_with_late_fee(self, raw_connection, mocker):
         """R4 & R5: Test returning an overdue book and ensure fee is in the message."""
         patron_id = "555555"
         book_id = 1
-        
+
         # Manually create a borrow record that is overdue
         now = datetime.now()
         borrow_date = now - timedelta(days=20)
         due_date = borrow_date + timedelta(days=14) # Due 6 days ago
-        
+
         setup_borrow_record(raw_connection, patron_id, book_id, borrow_date, due_date)
         raw_connection.execute("UPDATE books SET available_copies = available_copies - 1 WHERE id = 1")
         raw_connection.commit()
@@ -1431,7 +1486,7 @@ class TestR4ReturnBook:
         database.datetime.now.return_value = now
 
         success, message = return_book_by_patron(patron_id, book_id)
-        
+
         assert success is True
         assert "Late fee: $3.00" in message # 6 days @ $0.50/day
 
@@ -1440,14 +1495,14 @@ class TestR4ReturnBook:
         patron_id = "666666"
         book_id = 1
         success, message = return_book_by_patron(patron_id, book_id)
-        
+
         assert success is False
         assert "No active borrow record found" in message
 
 
 class TestR5LateFeeCalculation:
     """Tests for R5: Late Fee Calculation API"""
-    
+
     @pytest.fixture
     def setup_overdue_book(self, raw_connection):
         patron_id = "777777"
@@ -1455,7 +1510,7 @@ class TestR5LateFeeCalculation:
         now = datetime(2023, 1, 30) # A fixed point in time for consistency
         borrow_date = now - timedelta(days=30) # Borrowed 30 days ago
         due_date = borrow_date + timedelta(days=14) # Due 16 days ago
-        
+
         setup_borrow_record(raw_connection, patron_id, book_id, borrow_date, due_date)
         return patron_id, book_id, due_date
 
@@ -1471,14 +1526,14 @@ class TestR5LateFeeCalculation:
     def test_late_fee_scenarios(self, setup_overdue_book, mocker, days_after_due, expected_fee):
         """R5: Test various overdue scenarios and their corresponding fees."""
         patron_id, book_id, due_date = setup_overdue_book
-        
+
         # Mock datetime.now() inside the library_service module
         mocked_now = due_date + timedelta(days=days_after_due)
         mocker.patch("library_service.datetime")
         library_service.datetime.now.return_value = mocked_now
-        
+
         result = calculate_late_fee_for_book(patron_id, book_id)
-        
+
         assert result["fee_amount"] == expected_fee
         assert result["days_overdue"] == days_after_due
 
@@ -1551,27 +1606,27 @@ class TestR7PatronStatus:
     def test_patron_status_comprehensive_report(self, setup_patron_records, mocker):
         """R7: Test a full report with history, current loans, and late fees."""
         patron_id, base_time = setup_patron_records
-        
+
         # Mock datetime.now() in the service to get predictable fee calculations
         mocker.patch("library_service.datetime")
         library_service.datetime.now.return_value = base_time
 
         report = get_patron_status_report(patron_id)
-        
+
         assert report["status"] == "OK"
         assert report["patron_id"] == patron_id
-        
+
         # Verify counts
         assert report["active_count"] == 2
         assert len(report["current_loans"]) == 2
         assert len(report["history"]) == 1
-        
+
         # Verify total late fees (8 days overdue = 7*0.5 + 1*1.0 = $4.50)
         assert report["total_late_fees"] == 4.50
 
         # Verify history item
         assert report["history"][0]["book_id"] == 1
-        
+
         # Verify current loan details
         current_book_ids = {loan["book_id"] for loan in report["current_loans"]}
         assert current_book_ids == {2, 3}
@@ -1583,18 +1638,18 @@ class TestR7PatronStatus:
             if loan["book_id"] == 3: # Overdue book
                 assert loan["is_overdue"] is True
                 assert loan["late_fee"] == 4.50
-                
+
     def test_patron_status_no_records(self):
         """R7: Test report for a patron with no borrowing history."""
         patron_id = "999999"
         report = get_patron_status_report(patron_id)
-        
+
         assert report["status"] == "No borrow records found."
         assert report["active_count"] == 0
         assert report["total_late_fees"] == 0.0
         assert report["current_loans"] == []
         assert report["history"] == []
-        
+
     def test_patron_status_invalid_id(self):
         """R7: Test report for an invalid patron ID format."""
         patron_id = "invalid"
@@ -1602,30 +1657,39 @@ class TestR7PatronStatus:
         assert "Invalid patron ID" in report["status"]
 ```
 
-Full model outputs are archived in `reports/A2/responses/`.
+#v(2em)
+*Full model outputs are archived in `reports/A2/responses/`.*
 
-## 4. test-case comparison & analysis
+#pagebreak()
 
-### my tests
+= 4. Comparison & Analysis
+== Existing Tests
 - service-layer focus with light helpers and fresh sqlite per test
 - assertions are on behaviour we care about
 
-### gpt-5-codex
-- swaps our fixtures for manual sql inserts and hard-coded ids which dodges the validation logic and feels a bit fragile
+== GPT-5-Codex
+- swaps our fixtures for manual SQL inserts and hard-coded ids which
+  dodges the validation logic and feels a bit fragile
 - coverage overlaps ours; not a lot of new angles yet
 
-### sonnet-4.5
-- lots of edge cases and combos, but the volume makes it tough to manage and it doesn’t play nicely with our fixture setup
+== Claude Sonnet 4.5
+- lots of edge cases and combos, but the volume makes it tough to manage
+  and it doesn’t play nicely with our fixture setup
 - still a decent idea bank if cherry-picked
 
-### gemini-2.5-pro
-- brings nicer parametrized examples, but it leans on seed data and fixture scopes that clash with the per-test reset
+== Gemini-2.5-Pro
+- brings nicer parametrized examples, but it leans on seed data and
+  fixture scopes that clash with the per-test reset
 - probably workable with edits, just not plug-and-play right now
 
-### summary
-- lots of nuggets we could port over (extra r1 validation, late-fee variations), but would need a careful review before we trust them
+== Summary
+- lots of nuggets we could port over (extra r1 validation, late-fee
+  variations), but would need a careful review before we trust them
 
-## 5. CI/CD Pipeline Setup
-
-- github actions workflow lives at `.github/workflows/tests.yml` and runs pytest with coverage across ubuntu, macos, and windows for python 3.10–3.12
-- coverage uploads through codecov (token stored as `CODECOV_TOKEN`), and the readme badges mirror the latest run
+= 5. CI/CD Pipeline Setup
+<cicd-pipeline-setup>
+- GitHub actions workflow at `.github/workflows/tests.yml` and runs
+  Pytest with coverage across Ubuntu, Macos, and Windows for Python
+  3.10–3.12
+- coverage uploads through codecov (token stored as `CODECOV_TOKEN`),
+  and the README badges mirrors latest run

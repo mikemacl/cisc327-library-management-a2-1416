@@ -3,6 +3,8 @@ Library Service Module - Business Logic Functions
 Contains all the core business logic for the Library Management System
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 from database import (
@@ -18,6 +20,7 @@ from database import (
     get_all_books,
     search_books,
 )
+from services.payment_service import PaymentGateway, PaymentGatewayError
 
 def add_book_to_catalog(title: str, author: str, isbn: str, total_copies: int) -> Tuple[bool, str]:
     """
@@ -246,3 +249,98 @@ def get_patron_status_report(patron_id: str) -> Dict:
         "total_late_fees": round(total_late_fees, 2),
         "status": "OK" if records else "No borrow records found.",
     }
+
+def _payment_response(
+    success: bool,
+    message: str,
+    *,
+    transaction_id: str | None = None,
+    amount: float = 0.0,
+) -> Dict:
+    return {
+        "success": success,
+        "message": message,
+        "transaction_id": transaction_id,
+        "amount": round(amount, 2),
+    }
+
+def _is_valid_patron_id(patron_id: str) -> bool:
+    return bool(patron_id and patron_id.isdigit() and len(patron_id) == 6)
+
+def pay_late_fees(
+    patron_id: str,
+    book_id: int,
+    payment_gateway: PaymentGateway,
+) -> Dict:
+    if not _is_valid_patron_id(patron_id):
+        return _payment_response(False, "invalid patron id; must be 6 digits.")
+
+    book = get_book_by_id(book_id)
+    if not book:
+        return _payment_response(False, "book not found.")
+
+    fee_info = calculate_late_fee_for_book(patron_id, book_id)
+    fee_amount = round(float(fee_info.get("fee_amount", 0.0)), 2)
+    if fee_amount <= 0:
+        return _payment_response(False, "no late fees due for this book.")
+
+    try:
+        response = payment_gateway.process_payment(patron_id, book_id, fee_amount)
+    except PaymentGatewayError as exc:
+        return _payment_response(False, f"payment gateway error: {exc}", amount=fee_amount)
+    except Exception as exc:  # pragma: no cover - defensive
+        return _payment_response(False, f"payment failed: {exc}", amount=fee_amount)
+
+    status = str(response.get("status", "")).lower()
+    transaction_id = response.get("transaction_id")
+    if status not in {"approved", "success", "ok"}:
+        return _payment_response(
+            False,
+            "payment declined by gateway.",
+            transaction_id=transaction_id,
+            amount=fee_amount,
+        )
+
+    return _payment_response(
+        True,
+        f'late fee payment recorded for "{book["title"]}".',
+        transaction_id=transaction_id,
+        amount=fee_amount,
+    )
+
+def refund_late_fee_payment(
+    transaction_id: str,
+    amount: float,
+    payment_gateway: PaymentGateway,
+) -> Dict:
+    if not transaction_id or not transaction_id.strip():
+        return _payment_response(False, "transaction id is required.")
+
+    normalized_amount = round(float(amount or 0.0), 2)
+    if normalized_amount <= 0:
+        return _payment_response(False, "refund amount must be positive.")
+    if normalized_amount > 15.0:
+        return _payment_response(False, "refund amount cannot exceed $15.00.")
+
+    try:
+        response = payment_gateway.refund_payment(transaction_id.strip(), normalized_amount)
+    except PaymentGatewayError as exc:
+        return _payment_response(False, f"payment gateway error: {exc}", amount=normalized_amount)
+    except Exception as exc:  # pragma: no cover - defensive
+        return _payment_response(False, f"refund failed: {exc}", amount=normalized_amount)
+
+    status = str(response.get("status", "")).lower()
+    if status not in {"refunded", "success", "ok"}:
+        return _payment_response(
+            False,
+            "refund declined by gateway.",
+            transaction_id=response.get("transaction_id", transaction_id),
+            amount=normalized_amount,
+        )
+
+    return _payment_response(
+        True,
+        f"refund issued for ${normalized_amount:.2f}.",
+        transaction_id=response.get("transaction_id", transaction_id),
+        amount=normalized_amount,
+    )
