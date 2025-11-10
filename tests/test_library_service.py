@@ -8,7 +8,7 @@ from typing import Dict, List
 import pytest
 
 import database
-import library_service
+from services import library_service
 
 
 # helpers
